@@ -603,7 +603,7 @@ if (process.argv[3]) {
 	}
 }
 
-sys.puts('Nodecraft ' + 'v0.1'.bold.red + ' starting up.')
+sys.puts('Nodecraft ' + 'v0.2'.bold.red + ' starting up.')
 
 // TODO make port an option
 server.listen(listenPort, listenOn);
