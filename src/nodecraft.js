@@ -356,6 +356,14 @@ function blockplace(session, pkt) {
 
 function flying(session, pkt) {}
 
+function playerlook(session, pkt) {}
+
+function animation(session, pkt) {}
+
+function closewindow(session, pkt) {}
+
+function windowclick(session, pkt) {}
+
 function checkEntities(session, x, y, z) {
 	var pickups = session.world.entities.findPickups(x * 32, y * 32, z * 32)
 		blockBuffer = new Buffer(7 * pickups.length);
@@ -371,7 +379,7 @@ function checkEntities(session, x, y, z) {
 		// this buffer is formatted like this: http://mc.kev009.com/Slot_Data
 		var pos = 7 * i;
 		blockBuffer.writeInt16BE(item.type, pos, true); // the type
-		blockBuffer.writeInt8(1, pos + 2, true); // where is quantity stored?
+		blockBuffer.writeInt8(9, pos + 2, true); // where is quantity stored?
 		blockBuffer.writeInt16BE(0, pos + 3, true); // damage/block metadata
 		blockBuffer.writeInt16BE(-1, pos + 5, true); // no further data
 
@@ -389,10 +397,16 @@ function checkEntities(session, x, y, z) {
 	if(pickups.length > 0) {
 		// Push the packet to the client's inventory
 		// all at once for efficency. no need for a separate packet for each item.
+		
+		//For testing, we just give the player 5 dirt blocks until we get a real inventory system running.
+		//At least it doesn't crash anymore!
 		session.stream.write(ps.makePacket({
-			type: 0x68,
-			count: pickups.length,
-			blocks: blockBuffer
+			type: 0x67,
+			windowId: 0,
+			slot: 36,
+			blockId: 3,
+			itemCount: 5,
+			damage: 0
 		}));	
 	}
 }
@@ -450,9 +464,13 @@ var packets = {
 	0x03: chat,
 	0x0a: flying,
 	0x0b: playerpos,
+	0x0c: playerlook,
 	0x0d: moveandlook,
 	0x0e: blockdig,
+	0x12: animation,
 	0x0f: blockplace,
+	0x65: closewindow,
+	0x66: windowclick,
 	0xfe: serverlistping,
 	0xff: disconnect
 };
