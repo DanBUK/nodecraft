@@ -1,4 +1,4 @@
-var sys = require('util');
+﻿var sys = require('util');
 var pack = require('jspack').jspack;
 
 function concat(buf1, buf2) {
@@ -148,6 +148,31 @@ var unpackItems = function (pkt) {
 	return items;
 }
 
+var packSlot = function (slot) {
+    var buf = new Buffer(2);
+	buf = concat(buf, makers['short'](slot.id));
+	if (items[i].id != -1) {
+		buf = concat(buf, makers['byte'](slot.count));
+		buf = concat(buf, makers['short'](slot.damage));
+	}
+    
+    return buf;
+}
+
+var unpackSlot = function (pkt) {
+    var itemId = parsers.short(pkt), count, damage;
+	if (itemId != -1) {
+        count = parsers.byte(pkt);
+		damage = parsers.short(pkt);
+    }
+    
+    return {
+		itemId: itemId,
+		count: count,
+		damage: damage
+		};
+}
+
 function byte(name) {
 	return ['byte', name];
 }
@@ -196,6 +221,10 @@ function blockarr(name) {
 	return ['blockarr', name];
 }
 
+function slot(name) {
+	return ['slot', name];
+}
+
 var clientPacketStructure = {
 	0x00: [int('pingID')],
 	0x01: [int('protoVer'), str('username'), long('mapSeed'), int('serverMode'), byte('dimension'), byte('difficulty'), byte('height'), byte('slots')],
@@ -211,7 +240,7 @@ var clientPacketStructure = {
 	0x0d: [double('x'), double('y'), double('stance'), double('z'), float('rotation'), float('pitch'), bool('onGround')],
 
 	0x0e: [byte('status'), int('x'), byte('y'), int('z'), byte('face')],
-	0x0f: [int('x'), byte('y'), int('z'), byte('face')],
+	0x0f: [int('x'), byte('y'), int('z'), byte('direction'), slot('slot')],
 	0x10: [short('slotId')],
 	0x12: [int('uid'), byte('animation')],
 	0x13: [int('uid'), byte('actionId')],
@@ -339,6 +368,7 @@ var parsers = {
 	items: unpackItems,
 	intstr: unpackIntString,
 	blockarr: unpackBlockArr,
+    slot: unpackSlot,
 }
 
 var makers = {
@@ -353,6 +383,7 @@ var makers = {
 	items: packItems,
 	intstr: packIntString,
 	blockarr: packBlockArr,
+    slot: packSlot,
 }
 
 exports.parsePacket = function (buf) {

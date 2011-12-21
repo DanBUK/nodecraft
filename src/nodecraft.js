@@ -1,4 +1,4 @@
-
+ï»¿
 var sys = require('util'),
 	net = require('net'),
 	colors = require('colors'),
@@ -324,21 +324,21 @@ function isUsableObject(type) {
 }
 
 function blockplace(session, pkt) {
-	var coords = findBlockCoordsForDirection(pkt.x, pkt.y, pkt.z, pkt.face);
-
-	if (pkt.item == -1) {
+        
+	if ((pkt.x == -1 && pkt.y == -1 && pkt.z ==-1) || pkt.slot.itemId == -1) {
 		sys.debug("Player USING block " + pkt.x + " " + pkt.y + " " + pkt.z);
 		return;
-
 	}
 
+   	var coords = findBlockCoordsForDirection(pkt.x, pkt.y, pkt.z, pkt.direction);
+    
 /* Check to ensure that we're building against a block that can't be "used"
 	 * If we can "use" a block; the build event is sent to tell the server that we're using that block
 	 */
 	checkBlockEventHandler = function (type) {
 		if (isUsableObject(type)) return;
 
-		session.world.terrain.setCellType(coords.x, coords.y, coords.z, pkt.item);
+		session.world.terrain.setCellType(coords.x, coords.y, coords.z, pkt.slot.itemId);
 
 		/* TODO: TerrainTracker should do this by listening on the chunk and updating all clients that have it when the change goes through */
 		session.stream.write(ps.makePacket({
@@ -346,7 +346,7 @@ function blockplace(session, pkt) {
 			x: coords.x,
 			y: coords.y,
 			z: coords.z,
-			blockType: pkt.item,
+			blockType: pkt.slot.itemId,
 			blockMetadata: 0
 		}));
 	};
@@ -447,7 +447,7 @@ function chat(session, pkt) {
 function serverlistping(session, pkt) {
 	session.stream.end(ps.makePacket({
 		type: 0xff, 
-		message: "A Nodecraft Server§0§20" //TODO: An actual MOTD
+		message: "A Nodecraft ServerÂ§0Â§20" //TODO: An actual MOTD
 	}));
 	session.closed = true;
 }
