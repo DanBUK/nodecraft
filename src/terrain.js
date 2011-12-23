@@ -5,7 +5,7 @@ var floodMessages = false;
 
 function WorldTerrain() {
 	this.chunk_xz_granularity = 16;
-
+    
 	// TODO - this masking solution only works for power of two chunks
 	this.chunk_xz_mask = 0xF;
 	this.chunk_xz_shift = 4;
@@ -297,7 +297,7 @@ WorldTerrain.prototype.getMaxHeight = function (x, z, done_callback) {
 	var me = this;
 
 	iterate = function (cell_code) {
-		if (cell_code != 0x0 || currentY == 0) {
+		if (cell_code != 0x0/* || currentY == 0*/) {
 			done_callback(currentY);
 			return;
 		}

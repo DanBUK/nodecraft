@@ -1,12 +1,6 @@
 ﻿var sys = require('util');
 var pack = require('jspack').jspack;
-
-function concat(buf1, buf2) {
-	var buf = new Buffer(buf1.length + buf2.length);
-	buf1.copy(buf, 0, 0);
-	buf2.copy(buf, buf1.length, 0);
-	return buf;
-}
+var helpers = require('./helpers');
 
 Packet = function (data) {
 	this.type = data[0];
@@ -23,7 +17,7 @@ var packString = function (str) {
 	for (var i = 0; i < str.length; i++){
 		makers['short'](str.charCodeAt(i)).copy(buf, i * 2);
 	}
-	return concat(makers['short'](str.length), buf);
+	return helpers.concat(makers['short'](str.length), buf);
 }
 var unpackString = function (pkt) {
 	var len = parsers.short(pkt) * 2;
@@ -38,7 +32,7 @@ var unpackString = function (pkt) {
 }
 var packIntString = function (str) {
 	if (!(str instanceof Buffer)) str = new Buffer(str);
-	return concat(makers['int'](str.length), str);
+	return helpers.concat(makers['int'](str.length), str);
 }
 var unpackIntString = function (pkt) {
 	var len = parsers.int(pkt);
@@ -55,12 +49,12 @@ var packBlockArr = function (blks) {
 	var metadataArr = new Buffer(0);
 	blks.forEach(function (b) {
 		var coord = ((b.x & 0xf) << 12) | ((b.z & 0xf) << 8) | (b.y & 0xff);
-		coordArr = concat(coordArr, makers.short(coord));
-		typeArr = concat(typeArr, makers.byte(b.type));
-		metadataArr = concat(metadataArr, makers.byte(b.metadata));
+		coordArr = helpers.concat(coordArr, makers.short(coord));
+		typeArr = helpers.concat(typeArr, makers.byte(b.type));
+		metadataArr = helpers.concat(metadataArr, makers.byte(b.metadata));
 	});
 
-	return concat(buf, concat(coordArr, concat(typeArr, concat(metadataArr))));
+	return helpers.concat(buf, helpers.concat(coordArr, helpers.concat(typeArr, metadataArr)));
 }
 var unpackBlockArr = function (pkt) {
 	var len = parsers.short(pkt);
@@ -100,10 +94,10 @@ var packBool = function (bool) {
 var packItems = function (items) {
 	var buf = makers['short'](items.length);
 	for (var i = 0; i < items.length; i++) {
-		buf = concat(buf, makers['short'](items[i].id));
+		buf = helpers.concat(buf, makers['short'](items[i].id));
 		if (items[i].id != -1) {
-			buf = concat(buf, makers['byte'](items[i].count));
-			buf = concat(buf, makers['short'](items[i].health));
+			buf = helpers.concat(buf, makers['byte'](items[i].count));
+			buf = helpers.concat(buf, makers['short'](items[i].health));
 		}
 	}
 	return buf;
@@ -150,10 +144,10 @@ var unpackItems = function (pkt) {
 
 var packSlot = function (slot) {
     var buf = new Buffer(2);
-	buf = concat(buf, makers['short'](slot.id));
+	buf = helpers.concat(buf, makers['short'](slot.id));
 	if (items[i].id != -1) {
-		buf = concat(buf, makers['byte'](slot.count));
-		buf = concat(buf, makers['short'](slot.damage));
+		buf = helpers.concat(buf, makers['byte'](slot.count));
+		buf = helpers.concat(buf, makers['short'](slot.damage));
 	}
     
     return buf;
@@ -234,14 +228,13 @@ var clientPacketStructure = {
 	0x05: [int('entityID'), short('slot'), short('itemID'), short('damage')],
 	0x07: [int('playerId'), int('targetId'), bool('isLeftClick')],
 	0x09: [byte('dimension'), byte('difficulty'), byte('gameMode'), short('worldHeight'), long('mapSeed')],
-	0x0a: [bool('onGround')],
+    0x0a: [bool('onGround')],
 	0x0b: [double('x'), double('y'), double('stance'), double('z'), bool('onGround')],
 	0x0c: [float('rotation'), float('pitch'), bool('onGround')],
 	0x0d: [double('x'), double('y'), double('stance'), double('z'), float('rotation'), float('pitch'), bool('onGround')],
-
 	0x0e: [byte('status'), int('x'), byte('y'), int('z'), byte('face')],
 	0x0f: [int('x'), byte('y'), int('z'), byte('direction'), slot('slot')],
-	0x10: [short('slotId')],
+	0x10: [short('newSlot')],
 	0x12: [int('uid'), byte('animation')],
 	0x13: [int('uid'), byte('actionId')],
 	0x15: [int('uid'), short('item'), byte('amount'), short('life'), int('x'), int('y'), int('z'), byte('rotation'), byte('pitch'), byte('hvel')],
@@ -303,7 +296,6 @@ var packetNames = {
 	0x02: 'HANDSHAKE',
 	0x03: 'CHAT',
 	0x04: 'TIME',
-	// 0x05: 'INVENTORY',
 	0x05: 'ENTITY_EQUIPMENT',
 	0x06: 'SPAWN_POS',
 	0x0a: 'FLYING',
@@ -312,8 +304,8 @@ var packetNames = {
 	0x0d: 'PLAYER_MOVE_LOOK',
 	0x0e: 'DIG_BLOCK',
 	0x0f: 'PLACE_BLOCK',
-	0x10: 'WIELD',
-	//0x11: 'ADD_TO_INVENTORY',
+	0x10: 'CHANGE_HOLDING',
+	0x11: 'USE_BED',
 	0x12: 'ANIMATION',
 	0x14: 'PLAYER_SPAWN',
 	0x15: 'PICKUP_SPAWN',
@@ -417,7 +409,7 @@ exports.makePacketWith = function (pktData, structures) {
 	for (var field in struct) {
 		var type = struct[field][0];
 		var name = struct[field][1];
-		buf = concat(buf, makers[type](pktData[name]));
+		buf = helpers.concat(buf, makers[type](pktData[name]));
 	}
 	return buf;
 }

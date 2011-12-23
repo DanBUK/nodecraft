@@ -8,9 +8,10 @@ var sys = require('util'),
 	chunk = require('./chunk'),
 	session = require('./session'),
 	terrain = require('./terrain'),
-	uniqueid = require('./uniqueid'),
-	entities = require('./entities');
-
+	entities = require('./entities'),
+    world = require('./world'),
+    player = require('./player'),
+    helpers = require('./helpers');
 
 var enableProtocolDebug = 1;
 var enableChunkPreDebug = 0;
@@ -28,17 +29,6 @@ function chunkpredebug() {
 
 function terrainmodsdebug() {
 	if (enableTerrainModsDebug) sys.debug.apply(sys, arguments);
-}
-
-
-// TODO: put this useful function somewhere else
-
-
-function concat(buf1, buf2) {
-	var buf = new Buffer(buf1.length + buf2.length);
-	buf1.copy(buf, 0, 0);
-	buf2.copy(buf, buf1.length, 0);
-	return buf;
 }
 
 function keepalive(session, pkt) {
@@ -60,7 +50,7 @@ function composeTerrainPacket(cb, session, x, z) {
 		windowBits: zip.MAX_WBITS
 	});
 	gzip.on('data', function (data) {
-		zippedChunk = concat(zippedChunk, data);
+		zippedChunk = helpers.concat(zippedChunk, data);
 	}).on('error', function (err) {
 		throw err;
 	}).on('end', function () {
@@ -91,6 +81,8 @@ function login(session, pkt) {
 
 	session.username = pkt.username; /* TODO: Add whitelist check here */
 
+    // TODO: Validate user against minecraft.net
+    
 	session.stream.write(ps.makePacket({
 		type: 0x01,
 		playerID: 0x0,
@@ -100,15 +92,15 @@ function login(session, pkt) {
 		dimension: 0,
 		difficulty: 0, 
 		height: 128, 
-		slots: 50 //TODO: Limit amount of players
+		slots: world.maxplayers //TODO: Limit amount of players
 	}));
 	session.stream.write(ps.makePacket({
 		type: 0x06,
 		x: 0,
-		y: 0,
+		y: 65,
 		z: 0
 	}));
-	session.stream.write(ps.makePacket({
+	sendPacketToAllPlayers(ps.makePacket({
 		type: 0x03,
 		message: pkt.username + ' joined the game',
 	}));
@@ -157,8 +149,8 @@ function login(session, pkt) {
 	*/
 
 	/* Fast start */
-	for (var x = -1 * 16; x < 1 * 16; x += 16) {
-		for (var z = -1 * 16; z < 1 * 16; z += 16) { /* Closure for callback [cannot do anonymously, otherwise we end up with 160,160] */
+	for (var x = -3 * 16; x < 3 * 16; x += 16) {
+		for (var z = -3 * 16; z < 3 * 16; z += 16) { /* Closure for callback [cannot do anonymously, otherwise we end up with 160,160] */
 			r = function (x, z) { /* Callback to be added to outgoing session task list */
 				return function (cb) {
 					composeTerrainPacket(cb, session, x, z);
@@ -174,9 +166,9 @@ function login(session, pkt) {
 		send_position_packet = function (posY) {
 			session.stream.write(ps.makePacket({
 				type: 0x0d,
-				x: 0.5,
-				y: posY + 4,
-				z: 0.5,
+				x: 0,
+				y: posY + 1,
+				z: 0,
 				stance: 71,
 				rotation: 0,
 				pitch: 0,
@@ -204,28 +196,15 @@ function login(session, pkt) {
 		}
 	}
 
+    world.onlineplayers++;
+    session.player = new player.Player(session);
+    session.player.name = pkt.username;
+    session.player.X = 0;
+    session.player.Y = 65;
+    session.player.Z = 0;
+    world.players.push(session.player);
 	session.pump();
 }
-
-var spawn_for_harvest = {
-	1: 4, // Stone -> cobblestone
-	2: 3, // Grass -> dirt
-	3: 3, // Dirt  -> dirt
-	4: 4, // Cobblestone -> cobblestone
-	5: 5, // Wood -> Wood
-	6: 6, // Sapling->Sapling
-	12: 12, // Sand->Sand
-	13: 13, // Gravel->Gravel
-	14: 14, // Gold Ore->Gold Ore
-	15: 15, // Iron Ore->Iron Ore
-	16: 263, // Coal Ore -> Coal
-	17: 17, // Logs -> Logs
-	37: 37, // Flower->Flower
-	38: 38, // Flower->Flower
-	39: 39, // Mushroom->Mushroom
-	40: 40, // Mushroom->Mushroom
-};
-
 
 function blockdig(session, pkt) {
 	if (pkt.status == 0x2) {
@@ -237,7 +216,7 @@ function blockdig(session, pkt) {
 
 			/* Reply with block dig notification */
 			/* TODO: terrainSessionTracker should do this by listening to the chunk */
-			session.stream.write(ps.makePacket({
+			sendPacketToAllPlayers(ps.makePacket({
 				type: 0x35,
 				x: pkt.x,
 				y: pkt.y,
@@ -247,12 +226,12 @@ function blockdig(session, pkt) {
 			}));
 
 			/* Spawn an object to be picked up */
-			if (cellType in spawn_for_harvest) {
+			if (cellType in world.spawn_for_harvest) {
 				// Spawn the object
-				var newEntity = world.entities.spawnEntity(pkt.x * 32 + 16, pkt.y * 32 + 16, pkt.z * 32 + 16, spawn_for_harvest[cellType], 0, 0, 0);
+				var newEntity = world.entities.spawnEntity(pkt.x * 32 + 16, pkt.y * 32 + 16, pkt.z * 32 + 16, world.spawn_for_harvest[cellType], 0, 0, 0);
 
 				/* TODO - this should be done by something listening on the EntityTracker */
-				session.stream.write(ps.makePacket({
+				sendPacketToAllPlayers(ps.makePacket({
 					type: 0x15,
 					uid: newEntity.uid,
 					item: newEntity.type,
@@ -270,59 +249,6 @@ function blockdig(session, pkt) {
 	}
 }
 
-function findBlockCoordsForDirection(x, y, z, face) {
-	switch (face) {
-	case 0:
-		return {
-			x: x,
-			y: y - 1,
-			z: z
-		};
-	case 1:
-		return {
-			x: x,
-			y: y + 1,
-			z: z
-		};
-	case 2:
-		return {
-			x: x,
-			y: y,
-			z: z - 1
-		};
-	case 3:
-		return {
-			x: x,
-			y: y,
-			z: z + 1
-		};
-	case 4:
-		return {
-			x: x - 1,
-			y: y,
-			z: z
-		};
-	case 5:
-		return {
-			x: x + 1,
-			y: y,
-			z: z
-		};
-	}
-}
-
-
-function isUsableObject(type) {
-	var usable_objects = {
-		61: true,
-		62: true,
-		58: true,
-		54: true
-	};
-
-	return type in usable_objects;
-}
-
 function blockplace(session, pkt) {
         
 	if ((pkt.x == -1 && pkt.y == -1 && pkt.z ==-1) || pkt.slot.itemId == -1) {
@@ -330,18 +256,18 @@ function blockplace(session, pkt) {
 		return;
 	}
 
-   	var coords = findBlockCoordsForDirection(pkt.x, pkt.y, pkt.z, pkt.direction);
+   	var coords = helpers.findBlockCoordsForDirection(pkt.x, pkt.y, pkt.z, pkt.direction);
     
 /* Check to ensure that we're building against a block that can't be "used"
 	 * If we can "use" a block; the build event is sent to tell the server that we're using that block
 	 */
 	checkBlockEventHandler = function (type) {
-		if (isUsableObject(type)) return;
+		if (helpers.isUsableObject(type)) return;
 
 		session.world.terrain.setCellType(coords.x, coords.y, coords.z, pkt.slot.itemId);
 
 		/* TODO: TerrainTracker should do this by listening on the chunk and updating all clients that have it when the change goes through */
-		session.stream.write(ps.makePacket({
+		sendPacketToAllPlayers(ps.makePacket({
 			type: 0x35,
 			x: coords.x,
 			y: coords.y,
@@ -349,7 +275,7 @@ function blockplace(session, pkt) {
 			blockType: pkt.slot.itemId,
 			blockMetadata: 0
 		}));
-	};
+ 	};
 
 	session.world.terrain.getCellType(pkt.x, pkt.y, pkt.z, checkBlockEventHandler);
 }
@@ -364,18 +290,28 @@ function closewindow(session, pkt) {}
 
 function windowclick(session, pkt) {}
 
+function changeholding(session, pkt) {
+    session.player.currentSlot = pkt.newSlot + 36;
+}
+
 function checkEntities(session, x, y, z) {
+    session.player.X = x;
+    session.player.Y = y;
+    session.player.Z = z;
+
 	var pickups = session.world.entities.findPickups(x * 32, y * 32, z * 32)
 		blockBuffer = new Buffer(7 * pickups.length);
 
 	for (var i = 0; i < pickups.length; i++) {
 		var item = pickups[i]; /* TODO - this should be done by something listening on the EntityTracker */
-		session.stream.write(ps.makePacket({
+		var pickupPacket = ps.makePacket({
 			type: 0x16,
 			collectedID: item.uid,
 			collectorID: session.uid
-		}));
-		
+		});
+        
+        sendPacketToAllPlayers(pickupPacket);
+
 		// this buffer is formatted like this: http://mc.kev009.com/Slot_Data
 		var pos = 7 * i;
 		blockBuffer.writeInt16BE(item.type, pos, true); // the type
@@ -386,7 +322,7 @@ function checkEntities(session, x, y, z) {
 		/* TODO - also should be done by something listening on the EntityTracker - destruction of an item
 		 * on the server should push the notification to affected clients automatically, without having to do it in every case
 		 * */
-		session.stream.write(ps.makePacket({
+		sendPacketToAllPlayers(ps.makePacket({
 			type: 0x1D,
 			uid: item.uid
 		}));
@@ -398,14 +334,14 @@ function checkEntities(session, x, y, z) {
 		// Push the packet to the client's inventory
 		// all at once for efficency. no need for a separate packet for each item.
 		
-		//For testing, we just give the player 5 dirt blocks until we get a real inventory system running.
+		//For testing, we just give the player a dirt block until we get a real inventory system running.
 		//At least it doesn't crash anymore!
 		session.stream.write(ps.makePacket({
 			type: 0x67,
 			windowId: 0,
 			slot: 36,
 			blockId: 3,
-			itemCount: 5,
+			itemCount: session.player.inventory[36]++,
 			damage: 0
 		}));	
 	}
@@ -447,12 +383,13 @@ function chat(session, pkt) {
 function serverlistping(session, pkt) {
 	session.stream.end(ps.makePacket({
 		type: 0xff, 
-		message: "A Nodecraft Server§0§20" //TODO: An actual MOTD
+		message: 'A Nodecraft Server§' + world.onlineplayers + '§' + world.maxplayers
 	}));
 	session.closed = true;
 }
 
 function disconnect(session, pkt) {
+    world.onlineplayers--;
 	session.stream.end();
 	session.closed = true;
 }
@@ -462,6 +399,7 @@ var packets = {
 	0x01: login,
 	0x02: handshake,
 	0x03: chat,
+    0x10: changeholding,
 	0x0a: flying,
 	0x0b: playerpos,
 	0x0c: playerlook,
@@ -475,13 +413,8 @@ var packets = {
 	0xff: disconnect
 };
 
-
-
-var world = new Object();
+var world = new world.World();
 world.terrain = new terrain.WorldTerrain();
-world.time = 0;
-world.sessions = [];
-world.uidgen = new uniqueid.UniqueIDGenerator();
 world.entities = new entities.EntityTracker(world);
 
 function sendTicks() {
@@ -493,6 +426,13 @@ function sendTicks() {
 		}));
 	}
 	world.time += 20;
+}
+
+function sendPacketToAllPlayers(pkt) {
+        for(var q = 0; q < world.players.length; q++)
+        {
+             world.players[q].session.stream.write(pkt);
+        }
 }
 
 setTimeout(1000, sendTicks());
@@ -524,19 +464,23 @@ var server = net.createServer(function (stream) {
 
 	stream.on('end', function () {
 		clientsession.closed = true;
+        var idx = world.sessions.indexOf(clientsession);
+        if(idx!=-1) world.sessions.splice(idx, 1);
 		stream.end();
 	});
 
 
 	stream.on('error', function () {
 		clientsession.closed = true;
+        var idx = world.sessions.indexOf(clientsession);
+        if(idx!=-1) world.sessions.splice(idx, 1);
 		stream.end();
 	});
 
 	var partialData = new Buffer(0);
 	stream.on('data', function (data) {
 		//protodebug(("C: " + sys.inspect(data)).cyan);
-		var allData = concat(partialData, data);
+		var allData = helpers.concat(partialData, data);
 		do {
 			try {
 				//sys.debug("parsing: " + sys.inspect(allData));
@@ -568,9 +512,6 @@ var server = net.createServer(function (stream) {
 	});
 });
 
-
-
-
 try {
 	var cfg = String(fs.readFileSync("packet_masks")).split('\n')
 } catch (err) {
@@ -591,13 +532,11 @@ for (var maskidx in cfg) {
 }
 
 
-var listenOn = process.argv[2] || 'localhost';
-
 var listenPort = 25565;
 
-if (process.argv[3]) {
+if (process.argv[2]) {
 	try {
-		listenPort = parseInt(process.argv[3]);
+		listenPort = parseInt(process.argv[2]);
 	}
 	catch (e) {
 	}
@@ -606,5 +545,5 @@ if (process.argv[3]) {
 sys.puts('Nodecraft ' + 'v0.2'.bold.red + ' starting up.')
 
 // TODO make port an option
-server.listen(listenPort, listenOn);
-sys.puts('Listening on ' + listenOn + (':' + listenPort).bold.grey + '...');
+server.listen(listenPort);
+sys.puts(('Listening on port ' + listenPort).bold.grey + '...');

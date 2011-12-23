@@ -1,11 +1,11 @@
 var EventEmitter = require('events').EventEmitter;
 var sys = require('util');
 
-
 var Session = function (world, stream) {
 	this.world = world;
 	this.stream = stream;
 	this.uid = world.uidgen.allocate();
+    this.player = {};
 	this.outgoingQueue = [];
 	this.closed = false;
 };
