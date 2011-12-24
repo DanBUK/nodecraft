@@ -8,7 +8,7 @@ var GATHER_RADIUS = 4 * 32;
 var AREA_MAG = 5;
 
 
-EntityTracker.prototype.spawnEntity = function (x, y, z, type, rotation, pitch, velocity) {
+EntityTracker.prototype.spawnEntity = function (x, y, z, type, yaw, pitch, velocity) {
 	var entity_index = [x >> AREA_MAG, z >> AREA_MAG];
 
 	if (!(entity_index in this.entity_areas)) {
@@ -21,7 +21,7 @@ EntityTracker.prototype.spawnEntity = function (x, y, z, type, rotation, pitch, 
 		y: y,
 		z: z,
 		type: type,
-		rotation: rotation,
+		yaw: yaw,
 		pitch: pitch,
 		velocity: velocity
 	};

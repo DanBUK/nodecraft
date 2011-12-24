@@ -9,7 +9,9 @@ Packet = function (data) {
 }
 
 Packet.prototype.needs = function (nBytes) {
-	if (this.data.length - this.cursor < nBytes) throw Error("oob");
+	if (this.data.length - this.cursor < nBytes) {
+		throw Error("oob");
+	}
 }
 
 var packString = function (str) {
@@ -54,7 +56,7 @@ var packBlockArr = function (blks) {
 		metadataArr = helpers.concat(metadataArr, makers.byte(b.metadata));
 	});
 
-	return helpers.concat(buf, helpers.concat(coordArr, helpers.concat(typeArr, metadataArr)));
+	return helpers.concat(buf, coordArr, typeArr, metadataArr);
 }
 var unpackBlockArr = function (pkt) {
 	var len = parsers.short(pkt);
@@ -143,9 +145,9 @@ var unpackItems = function (pkt) {
 }
 
 var packSlot = function (slot) {
-    var buf = new Buffer(2);
-	buf = helpers.concat(buf, makers['short'](slot.id));
-	if (items[i].id != -1) {
+    var buf = new Buffer(0);
+	buf = helpers.concat(buf, makers['short'](slot.itemId));
+	if (slot.itemId != -1) {
 		buf = helpers.concat(buf, makers['byte'](slot.count));
 		buf = helpers.concat(buf, makers['short'](slot.damage));
 	}
@@ -169,6 +171,10 @@ var unpackSlot = function (pkt) {
 
 function byte(name) {
 	return ['byte', name];
+}
+
+function ubyte(name) {
+	return ['ubyte', name];
 }
 
 function short(name) {
@@ -221,7 +227,7 @@ function slot(name) {
 
 var clientPacketStructure = {
 	0x00: [int('pingID')],
-	0x01: [int('protoVer'), str('username'), long('mapSeed'), int('serverMode'), byte('dimension'), byte('difficulty'), byte('height'), byte('slots')],
+	0x01: [int('protoVer'), str('username'), long('mapSeed'), int('serverMode'), byte('dimension'), byte('difficulty'), ubyte('height'), ubyte('slots')],
 	0x02: [str('username')],
 	0x03: [str('message')],
 	// 0x05: [int('invType'), items('items')],
@@ -230,25 +236,23 @@ var clientPacketStructure = {
 	0x09: [byte('dimension'), byte('difficulty'), byte('gameMode'), short('worldHeight'), long('mapSeed')],
     0x0a: [bool('onGround')],
 	0x0b: [double('x'), double('y'), double('stance'), double('z'), bool('onGround')],
-	0x0c: [float('rotation'), float('pitch'), bool('onGround')],
-	0x0d: [double('x'), double('y'), double('stance'), double('z'), float('rotation'), float('pitch'), bool('onGround')],
+	0x0c: [float('yaw'), float('pitch'), bool('onGround')],
+	0x0d: [double('x'), double('y'), double('stance'), double('z'), float('yaw'), float('pitch'), bool('onGround')],
 	0x0e: [byte('status'), int('x'), byte('y'), int('z'), byte('face')],
 	0x0f: [int('x'), byte('y'), int('z'), byte('direction'), slot('slot')],
 	0x10: [short('newSlot')],
 	0x12: [int('uid'), byte('animation')],
 	0x13: [int('uid'), byte('actionId')],
-	0x15: [int('uid'), short('item'), byte('amount'), short('life'), int('x'), int('y'), int('z'), byte('rotation'), byte('pitch'), byte('hvel')],
-	// Hvel is horizontal velocity [undoc'ed on wiki]
+	0x15: [int('uid'), short('item'), byte('amount'), short('life'), int('x'), int('y'), int('z'), byte('yaw'), byte('pitch'), byte('roll')],
 	0x65: [byte('windowId')],
-	0x66: [byte('windowId'), short('slot'), byte('rightClick'), short('actionNumber'), bool('shift'),short('blockId'), byte('itemCount'), short('damage')],
+	0x66: [byte('windowId'), short('slot'), byte('rightClick'), short('actionNumber'), bool('shift'), slot('slot')],
 	0xfe: [],
 	0xff: [str('message')],
-	// disconnect
 }
 
 var serverPacketStructure = {
 	0x00: [int('pingID')],
-	0x01: [int('playerID'), str('serverName'), long('mapSeed'), int('serverMode'), byte('dimension'), byte('difficulty'), byte('height'), byte('slots')],
+	0x01: [int('playerID'), str('serverName'), long('mapSeed'), int('serverMode'), byte('dimension'), byte('difficulty'), ubyte('height'), ubyte('maxPlayers')],
 	0x02: [str('serverID')],
 	0x03: [str('message')],
 	0x04: [long('time')],
@@ -256,25 +260,26 @@ var serverPacketStructure = {
 	0x05: [int('entityID'), short('slot'), short('itemID'), short('damage')],
 	0x06: [int('x'), int('y'), int('z')],
 	0x0c: [float('yaw'), float('pitch'), bool('onground')],
-	0x0d: [double('x'), double('stance'), double('y'), double('z'), float('rotation'), float('pitch'), bool('onGround')],
+	0x0d: [double('x'), double('stance'), double('y'), double('z'), float('yaw'), float('pitch'), bool('onGround')],
 	//0x0e: [byte('status'), int('x'), byte('y'), int('z'), byte('face')],
 	//0x0f: [short('id'), int('x'), byte('y'), int('z'), byte('direction')],
 	0x10: [int('uid'), short('item')],
 	0x11: [short('itemId'), byte('inBed'), int('x'), byte('y'), int('z')],
 	0x12: [int('uid'), byte('animation')],
-	0x14: [int('uid'), str('playerName'), int('x'), int('y'), int('z'), byte('rotation'), byte('pitch'), short('curItem')],
-	0x15: [int('uid'), short('item'), byte('amount'), short('life'), int('x'), int('y'), int('z'), byte('rotation'), byte('pitch'), byte('roll')],
+	0x13: [int('uid'), byte('actionId')],
+	0x14: [int('uid'), str('playerName'), int('x'), int('y'), int('z'), byte('yaw'), byte('pitch'), short('curItem')],
+	0x15: [int('uid'), short('item'), byte('amount'), short('life'), int('x'), int('y'), int('z'), byte('yaw'), byte('pitch'), byte('roll')],
 	0x16: [int('collectedID'), int('collectorID')],
 	0x17: [int('uid'), byte('objType'), int('x'), int('y'), int('z'), int('fireballerId')],
-	0x18: [int('uid'), byte('mobType'), int('x'), int('y'), int('z'), byte('rotation'), byte('pitch')],
+	0x18: [int('uid'), byte('mobType'), int('x'), int('y'), int('z'), byte('yaw'), byte('pitch')],
 	0x19: [int('uid'), str('title'), int('x'), int('y'), int('z'), int('direction')],
 	0x1a: [int('uid'), int('x'), int('y'), int('z'), short('count')],
 	0x1d: [int('uid')],
 	0x1e: [int('uid')],
 	0x1f: [int('uid'), byte('x'), byte('y'), byte('z')],
-	0x20: [int('uid'), byte('rotation'), byte('pitch')],
-	0x21: [int('uid'), byte('x'), byte('y'), byte('z'), byte('rotation'), byte('pitch')],
-	0x22: [int('uid'), int('x'), int('y'), int('z'), byte('rotation'), byte('pitch')],
+	0x20: [int('uid'), byte('yaw'), byte('pitch')],
+	0x21: [int('uid'), byte('x'), byte('y'), byte('z'), byte('yaw'), byte('pitch')],
+	0x22: [int('uid'), int('x'), int('y'), int('z'), byte('yaw'), byte('pitch')],
 	0x32: [int('x'), int('z'), bool('mode')],
 	// prechunk
 	0x33: [int('x'), short('y'), int('z'), byte('sizeX'), byte('sizeY'), byte('sizeZ'), intstr('chunk')],
@@ -283,7 +288,7 @@ var serverPacketStructure = {
 	// multi block change
 	0x35: [int('x'), byte('y'), int('z'), byte('blockType'), byte('blockMetadata')],
 	0x65: [byte('windowId')],
-	0x67: [byte('windowId'), short('slot'), short('blockId'), byte('itemCount'), short('damage')],
+	0x67: [byte('windowId'), short('slotId'), short('itemId'), byte('count'), short('damage')],
 	0x68: [byte('windowId'), short('count'), intstr('blocks')],
 	0x3b: [int('x'), short('y'), int('z'), str('nbt')],
 	0xff: [str('message')],
@@ -298,6 +303,7 @@ var packetNames = {
 	0x04: 'TIME',
 	0x05: 'ENTITY_EQUIPMENT',
 	0x06: 'SPAWN_POS',
+	0x07: 'USE_ENTITY',
 	0x0a: 'FLYING',
 	0x0b: 'PLAYER_POSITION',
 	0x0c: 'PLAYER_LOOK',
@@ -307,6 +313,7 @@ var packetNames = {
 	0x10: 'CHANGE_HOLDING',
 	0x11: 'USE_BED',
 	0x12: 'ANIMATION',
+	0x13: 'ENTITY_ACTION',
 	0x14: 'PLAYER_SPAWN',
 	0x15: 'PICKUP_SPAWN',
 	0x16: 'COLLECT_ITEM',
@@ -349,6 +356,7 @@ function pack_fmt(fmt) {
 
 var parsers = {
 	byte: unpack_fmt('b'),
+	ubyte: unpack_fmt('B'),
 	short: unpack_fmt('h'),
 	int: unpack_fmt('i'),
 	long: unpack_fmt('l'),
@@ -365,6 +373,7 @@ var parsers = {
 
 var makers = {
 	byte: pack_fmt('b'),
+	ubyte: pack_fmt('B'),
 	short: pack_fmt('h'),
 	int: pack_fmt('i'),
 	long: pack_fmt('l'),

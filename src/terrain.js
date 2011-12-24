@@ -71,9 +71,12 @@ WorldTerrain.prototype.loadTerrain = function (x, z, done_callback) {
 WorldTerrain.prototype.getChunk = function (x, z, done_callback) {
 	var x_i = this.chunkIndex(x);
 	var z_i = this.chunkIndex(z);
-	if (!this.chunks[[x_i, z_i]]) this.loadTerrain(x, z, done_callback)
-	else
-	done_callback(this.chunks[[x_i, z_i]]);
+	if (!this.chunks[[x_i, z_i]]) {
+		this.loadTerrain(x, z, done_callback)
+	}
+	else {
+		done_callback(this.chunks[[x_i, z_i]]);
+	}
 }
 
 WorldTerrain.prototype.chunkIndex = function (n) {
@@ -112,14 +115,21 @@ WorldTerrain.prototype.setCellType = function (x, y, z, t) {
 }
 
 function asyncMap(fn, list, cb_) {
-	if (typeof cb_ !== "function") throw new Error("No callback provided to asyncMap");
+	if (typeof cb_ !== "function") {
+		throw new Error("No callback provided to asyncMap");
+	}
+	
 	var data = [],
 		l = list.length;
-	if (!l) return cb_(null, []);
+	if (!l) {
+		return cb_(null, []);
+	}
 
 	function cb(d) {
 		data = data.concat(d);
-		if (--l === 0) cb_(data);
+		if (--l === 0) {
+			cb_(data);
+		}
 	}
 	list.forEach(function (ar) {
 		fn(ar, cb)
@@ -195,7 +205,9 @@ WorldTerrain.prototype.recalculateLighting = function (x, z, cb) {
 			for (var z = 0; z < 16 * 3; z++) {
 				for (var y = 0; y < highest_nontransmitting_chunk + 1; y++) {
 					// don't flood from impenetrable blocks, since they are all dark.
-					if (!isPenetrable(x + baseX, y, z + baseZ)) continue;
+					if (!isPenetrable(x + baseX, y, z + baseZ)) {
+						continue;
+					}
 
 					if (!isFlooded(x + baseX, y, z + baseZ)) {
 						floodLightFrom(x + baseX, y, z + baseZ);

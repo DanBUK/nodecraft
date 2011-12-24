@@ -1,8 +1,15 @@
 
-exports.concat = function (buf1, buf2) {
-    var buf = new Buffer(buf1.length + buf2.length);
-    buf1.copy(buf, 0, 0);
-    buf2.copy(buf, buf1.length, 0);
+exports.concat = function () {
+	var totalLength = 0, buf_pos = 0;
+	for(var i = 0; i < arguments.length; i++) {
+		totalLength += arguments[i].length;
+	}
+	
+	var buf = new Buffer(totalLength);
+	for(var j = 0; j < arguments.length; j++) {
+		arguments[j].copy(buf, buf_pos, 0);
+		buf_pos += arguments[j].length;
+	}
     return buf;
 };
 
@@ -57,3 +64,13 @@ exports.isUsableObject = function (type) {
 
 	return type in usable_objects;
 };
+
+exports.hiddenPackets = {
+	0x0a: true,
+	0x0b: true,
+	0x0c: true,
+	0x0d: true,
+	0x12: true,
+	0x32: true
+};
+
