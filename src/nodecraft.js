@@ -76,18 +76,24 @@ function composeTerrainPacket(cb, session, x, z) {
         });
 }
 
+var y = function(a){return Object.getOwnPropertyNames(a).filter(function(b){return"function"==typeof a[b]})};
+
 function sendPacketToAllPlayers(pkt) {
 	console.log(world.players);
         for (var q = 0; q < world.players.length; q++) {
-                world.players[q].session.stream.write(pkt);
+		//console.log(world.players[q].session.stream);
+		if (!world.players[q].session.stream._handle) { throw new Error('closed socket?'); continue; }
+		console.log(y(world.players[q].session.stream));
+		world.players[q].session.stream._handle.socket.write(pkt);
+                //world.players[q].session.stream.send(pkt);
         }
 }
 
 function sendPacketToOtherPlayers(pkt, myEid) {
-	console.log(world.players);
         for (var q = 0; q < world.players.length; q++) {
                 if (world.players[q].session.uid != myEid) {
-                        world.players[q].session.stream.write(pkt);
+			console.log(y(world.players[q].session.stream));
+                        world.players[q].session.stream._handle.socket.write(pkt);
                 }
         }
 }
