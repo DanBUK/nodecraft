@@ -180,9 +180,9 @@ function ubyte(name) {
 function short(name) {
 	return ['short', name];
 }
-// ToDo: Add ushort type
+
 function ushort(name) {
-	return ['short', name];
+	return ['ushort', name];
 }
 
 function int(name) {
@@ -265,7 +265,7 @@ var clientPacketStructure = {
 
 var serverPacketStructure = {
 	0x00: [int('pingID')],
-	0x01: [int('playerID'), str('serverName'), str('mapSeed'), int('serverMode'), int('dimension'), byte('difficulty'), ubyte('height'), ubyte('maxPlayers')],
+	0x01: [int('playerID'), str('serverName'), str('levelType'), int('serverMode'), int('dimension'), byte('difficulty'), ubyte('height'), ubyte('maxPlayers')],
 	0x02: [str('serverID')],
 	0x03: [str('message')],
 	0x04: [long('time')],
@@ -387,7 +387,7 @@ var packetNames = {
 	0x3d: 'SOUNDPARTICLE_EFFECT',
 	0x46: 'GAMESTATE_CHANGE',
 	0x47: 'THUNDERBOLT',
-	0x64: 'WINDOW_OPEN'
+	0x64: 'WINDOW_OPEN',
 	0x65: 'WINDOW_CLOSE',
 	0x66: 'WINDOW_CLICK',
 	0x67: 'SLOT_SET',
@@ -426,6 +426,7 @@ var parsers = {
 	byte: unpack_fmt('b'),
 	ubyte: unpack_fmt('B'),
 	short: unpack_fmt('h'),
+	ushort: unpack_fmt('H'),
 	int: unpack_fmt('i'),
 	long: unpack_fmt('l'),
 	str: unpackString,
@@ -443,6 +444,7 @@ var makers = {
 	byte: pack_fmt('b'),
 	ubyte: pack_fmt('B'),
 	short: pack_fmt('h'),
+	ushort: pack_fmt('H'),
 	int: pack_fmt('i'),
 	long: pack_fmt('l'),
 	str: packString,

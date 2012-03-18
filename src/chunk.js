@@ -2,24 +2,46 @@ var sys = require('util');
 
 var transmitsLight;
 
-var Chunk = function () {
+var Chunk = function (y) {
 	this.sizeX = 16;
-	this.sizeY = 128;
+	this.sizeY = 16;
 	this.sizeZ = 16;
+
+	this.yOffset = (y * this.sizeY);
 
 	this.sectionSize = this.sizeX * this.sizeY * this.sizeZ;
 	this.lit = 0;
+	this.isSky = true;
 
 	this.highest_nontransmitting_chunk = 0;
 
-	this.data = new Buffer(this.sizeX * this.sizeY * this.sizeZ * 2.5);
-	for (var i = 0; i < this.data.length; i++) {
-		this.data[i] = 0;
-	}
+	this.dataBlockType  = new Buffer(this.sectionSize); // size 4096
+	this.dataBlockType.fill(0);
+	this.dataMetadata   = new Buffer(this.sectionSize / 2); // size 2048
+	this.dataMetadata.fill(0);
+	this.dataBlockLight = new Buffer(this.sectionSize / 2);// size 2048
+	this.dataBlockLight.fill(0); 
+	this.dataSkyLight   = new Buffer(this.sectionSize / 2); // size 2048
+	this.dataSkyLight.fill(0);
+//	this.dataAdd        = new Buffer(this.sectionSize / 2);.fill(0); // size 2048
+	this.dataBiome      = new Buffer(this.sizeX * this.sizeZ); // size 256
+	this.dataBiome.fill(0);
+
+// 	this.offset = {
+// 		block:    0,
+// 		metadata: 1,
+// 		light:    1.5,
+// 		skyLight: 2,
+// //		add:      2.5
+// 		biome:    2.5 // 3 with addData
+// 	}
+
+	// this.data = new Buffer((this.sectionSize * 2.5) + (this.sizeX * this.sizeZ));
+	// this.data.fill(0);
 };
 
 Chunk.prototype.indexOf = function (x, y, z) {
-	return y + (z * this.sizeY) + (x * this.sizeY * this.sizeZ);
+	return (y - this.yOffset) + (z * this.sizeY) + (x * this.sizeY * this.sizeZ);
 };
 
 Chunk.prototype.setType = function (x, y, z, type) {
@@ -27,44 +49,70 @@ Chunk.prototype.setType = function (x, y, z, type) {
 		this.highest_nontransmitting_chunk = y;
 	}
 
-	this.data[this.indexOf(x, y, z)] = type;
+	if (!type === 0x00) {
+		this.isSky = false;
+	}
+
+	this.dataBlockType[this.indexOf(x, y, z)] = type;
 };
 
 Chunk.prototype.getType = function (x, y, z) {
-	return this.data[this.indexOf(x, y, z)];
+	return this.dataBlockType[this.indexOf(x, y, z)];
 };
 
-Chunk.prototype.setMetadata = function (x, y, z, meta) {
-	this.data[this.indexOf(x, y, z) + this.sectionSize] = meta;
-};
+function setHalfByte(bufferName, index, value) {
+	var trueIndex = ~~(index / 2),
+		top = index % 2 === 1,
+		currentValue = this[bufferName][trueIndex];
 
-Chunk.prototype.getMetadata = function (x, y, z) {
-	return this.data[this.indexOf(x, y, z) + this.sectionSize];
-};
-
-Chunk.prototype.setLighting = function (x, y, z, lighting) {
-	var idx = this.indexOf(x, y, z),
-		byte = Math.floor(idx / 2),
-		top = idx % 2 === 1,
-		value = this.data[byte + this.sectionSize * 2];
 	if (top) {
-		value = (value & 0xf) | ((lighting & 0xf) << 4);
+		value = (currentValue & 0xf) | ((value & 0xf) << 4);
 	} else {
-		value = (value & 0xf0) | (lighting & 0xf);
+		value = (currentValue & 0xf0) | (value & 0xf);
 	}
-	this.data[byte + this.sectionSize * 2] = value;
-};
 
-Chunk.prototype.getLighting = function (x, y, z) {
-	var idx = this.indexOf(x, y, z),
-		byte = Math.floor(idx / 2),
-		top = idx % 2 === 1,
-		value = this.data[byte + this.sectionSize * 2];
+	this[bufferName][trueIndex] = value;
+}
+
+function getHalfByte(bufferName, index) {
+	var trueIndex = ~~(index / 2),
+		top = index % 2 === 1,
+		value = this[bufferName][trueIndex];
 	if (top) {
 		return (value & 0xf0) >> 4;
 	} else {
 		return (value & 0xf);
 	}
+}
+
+Chunk.prototype.setMetadata = function (x, y, z, meta) {
+	setHalfByte(
+		'dataMetadata',
+		this.indexOf(x, y, z),
+		meta
+	);
+};
+
+Chunk.prototype.getMetadata = function (x, y, z) {
+	return getHalfByte(
+		'dataMetadata',
+		this.indexOf(x, y, z)
+	);
+};
+
+Chunk.prototype.setLighting = function (x, y, z, meta) {
+	setHalfByte(
+		'dataBlockLight',
+		this.indexOf(x, y, z),
+		meta
+	);
+};
+
+Chunk.prototype.getLighting = function (x, y, z) {
+	return getHalfByte(
+		'dataBlockLight',
+		this.indexOf(x, y, z)
+	);
 };
 
 Chunk.prototype.clearLight = function () {
@@ -95,6 +143,17 @@ Chunk.prototype.setSkyLight = function (light) {
 		}
 	}
 };
+
+Chunk.prototype.getData = function() {
+	return {
+		BlockType: this.dataBlockType,
+		Metadata: this.dataMetadata,
+		BlockLight: this.dataBlockLight,
+		SkyLight: this.dataSkyLight,
+		Biome: this.dataBiome
+	}
+}
+
 
 var ChunkTypes = {
 	AIR: 0x00,

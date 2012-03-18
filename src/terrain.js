@@ -1,5 +1,6 @@
 var chunk = require('./chunk');
 var sys = require('util');
+var helpers = require('./helpers');
 
 var floodMessages = false;
 
@@ -13,9 +14,9 @@ function WorldTerrain() {
 	this.chunks = {};
 }
 
-function fillChunk(chunk_data, x, z) {
+function fillChunk(chunk_data, x, y, z) {
 	for (var x2 = 0; x2 < 16; x2++) {
-		for (var y2 = 0; y2 < 128; y2++) {
+		for (var y2 = y; y2 < y + 16; y2++) {
 			for (var z2 = 0; z2 < 16; z2++) {
 				var threshold = 64 + Math.floor(Math.sin(Math.sqrt((x + x2) * (x + x2) + (z + z2) * (z + z2)) / 64) * 16);
 
@@ -32,51 +33,81 @@ function fillChunk(chunk_data, x, z) {
 		}
 	}
 
-	if (Math.floor(Math.random() * 4) == 1) { /* add a tree */
-		var tx = Math.floor(Math.random() * 16);
-		var tz = Math.floor(Math.random() * 16);
-		var th = Math.floor(Math.random() * 6) + 3;
-		var ty;
+	// if (Math.floor(Math.random() * 4) == 1) { /* add a tree */
+	// 	var tx = Math.floor(Math.random() * 16);
+	// 	var tz = Math.floor(Math.random() * 16);
+	// 	var th = Math.floor(Math.random() * 6) + 3;
+	// 	var ty;
 
-		for (var i = 127; i >= 0; i--)
-		if (chunk_data.getType(tx, i, tz) != 0) {
-			ty = i;
-			break;
-		}
+	// 	for (var i = 127; i >= 0; i--)
+	// 	if (chunk_data.getType(tx, i, tz) != 0) {
+	// 		ty = i;
+	// 		break;
+	// 	}
 
 
-		for (var i = Math.floor(th / 2); i < th + 2; i++) {
-			for (var j = -2; j < 3; j++)
-			for (var k = -2; k < 3; k++) {
-				if (j + tx < 0 || j + tx > 15 || k + tz < 0 || k + tz > 15) continue;
-				chunk_data.setType(tx + j, i + ty, tz + k, 18);
-			}
-		}
+	// 	for (var i = Math.floor(th / 2); i < th + 2; i++) {
+	// 		for (var j = -2; j < 3; j++)
+	// 		for (var k = -2; k < 3; k++) {
+	// 			if (j + tx < 0 || j + tx > 15 || k + tz < 0 || k + tz > 15) continue;
+	// 			chunk_data.setType(tx + j, i + ty, tz + k, 18);
+	// 		}
+	// 	}
 
-		for (var i = 1; i <= th; i++)
-		chunk_data.setType(tx, i + ty, tz, 17);
+	// 	for (var i = 1; i <= th; i++)
+	// 	chunk_data.setType(tx, i + ty, tz, 17);
 
-	}
+	// }
 }
 
 /* Stubbed out with procedural terrain generator */
 WorldTerrain.prototype.loadTerrain = function (x, z, done_callback) {
-	var chunk_data = new chunk.Chunk();
-	fillChunk(chunk_data, x, z);
+	var columnChunks = [],
+		chunk_data,
+		maskpos = 1,
+		bitMask = 0;
 
-	this.chunks[[this.chunkIndex(x), this.chunkIndex(z)]] = chunk_data;
-	done_callback(chunk_data);
+	for (var y = 0; y < 16;y++){
+		chunk_data = new chunk.Chunk(y);
+		fillChunk(chunk_data, x, y, z);
+		console.log(y);
+		if (!chunk_data.isSky) {
+			columnChunks.push(chunk_data);
+			bitMask |= maskpos;
+		}
+		maskpos <<= 1;
+		this.chunks[[this.chunkIndex(x), this.chunkIndex(y), this.chunkIndex(z)]] = chunk_data;
+	}
+
+	chunk_data = helpers.concat.apply(null, columnChunks);
+	done_callback({data: helpers.concat.apply(null, columnChunks), mask: bitMask});
 }
 
 WorldTerrain.prototype.getChunk = function (x, z, done_callback) {
 	var x_i = this.chunkIndex(x);
 	var z_i = this.chunkIndex(z);
-	if (!this.chunks[[x_i, z_i]]) {
-		this.loadTerrain(x, z, done_callback)
+	if (!this.chunks[[x_i, 0, z_i]]) {
+		this.loadTerrain(x, z, done_callback);
+		return;
 	}
-	else {
-		done_callback(this.chunks[[x_i, z_i]]);
+
+	var columnChunks = [],
+		currentChunk,
+		maskpos = 1,
+		bitMask = 0;
+	for (var y = 0; y < 16;y++){
+		currentChunk = this.chunks[[this.chunkIndex(x), this.chunkIndex(y), this.chunkIndex(z)]];
+		if (!currentChunk.isSky) {
+			columnChunks.push(
+				this.chunks[[this.chunkIndex(x), this.chunkIndex(y), this.chunkIndex(z)]]
+			);
+			bitMask |= maskpos;
+		}
+		maskpos <<= 1;
 	}
+
+	done_callback({data: helpers.concat.apply(null, columnChunks), mask: bitMask});
+
 }
 
 WorldTerrain.prototype.chunkIndex = function (n) {
