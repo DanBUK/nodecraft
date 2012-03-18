@@ -21,6 +21,7 @@ var packString = function (str) {
 	}
 	return helpers.concat(makers['short'](str.length), buf);
 }
+
 var unpackString = function (pkt) {
 	var len = parsers.short(pkt) * 2;
 	pkt.needs(len);
@@ -32,10 +33,17 @@ var unpackString = function (pkt) {
 	pkt.cursor += len;
 	return str;
 }
+
 var packIntString = function (str) {
 	if (!(str instanceof Buffer)) str = new Buffer(str);
-	return helpers.concat(makers['int'](str.length), str);
+	return helpers.concat(makers['int'](str.length), makers['int'](0), str);
 }
+
+var packChunkData = function (str) {
+	if (!(str instanceof Buffer)) str = new Buffer(str);
+	return str;
+}
+
 var unpackIntString = function (pkt) {
 	var len = parsers.int(pkt);
 	pkt.needs(len);
@@ -58,6 +66,7 @@ var packBlockArr = function (blks) {
 
 	return helpers.concat(buf, coordArr, typeArr, metadataArr);
 }
+
 var unpackBlockArr = function (pkt) {
 	var len = parsers.short(pkt);
 	var blks = [];
@@ -233,6 +242,10 @@ function metadata(name) {
 	return ['byte', name];
 }
 
+function chunkData(name) {
+	return ['chunkData', name];
+}
+
 var clientPacketStructure = {
 	0x00: [int('pingID')],
 	0x01: [int('protoVer'), str('username'), str('mapSeed'), int('serverMode'), int('dimension'), byte('difficulty'), ubyte('height'), ubyte('slots')],
@@ -274,9 +287,6 @@ var serverPacketStructure = {
 	0x06: [int('x'), int('y'), int('z')],
 	0x08: [short('health'), short('food'), float('foodSat')],
 	0x09: [byte('dimension'), byte('difficulty'), byte('gameMode'), short('worldHeight'), str('mapSeed')],
-	0x0a: [bool('onGround')],
-	0x0b: [double('x'), double('y'), double('stance'), double('z'), bool('onGround')],
-	0x0c: [float('yaw'), float('pitch'), bool('onground')],
 	0x0d: [double('x'), double('stance'), double('y'), double('z'), float('yaw'), float('pitch'), bool('onGround')],
 	//0x0e: [byte('status'), int('x'), byte('y'), int('z'), byte('face')],
 	//0x0f: [short('id'), int('x'), byte('y'), int('z'), byte('direction')],
@@ -307,7 +317,8 @@ var serverPacketStructure = {
 	0x2b: [float('xpBar'), short('level'), short('xpTotal')],
 	0x32: [int('x'), int('z'), bool('mode')],
 	// prechunk
-	0x33: [int('x'), int('z'), bool('continuous'), ushort('primaryBit'), ushort('addBitMap'), int('chunkSize'), int('unused'), intstr('chunk')],
+//	0x33: [int('x'), int('z'), bool('continuous'), ushort('primaryBit'), ushort('addBitMap'), int('chunkSize'), int('unused'), chunkData('chunk')],
+	0x33: [int('x'), int('z'), bool('continuous'), ushort('primaryBit'), ushort('addBitMap'), intstr('chunk')],
 	// map chunk, gzipped
 	0x34: [int('x'), int('z'), short('count'), multiblock('blocks')],
 	// multi block change
@@ -455,6 +466,7 @@ var makers = {
 	intstr: packIntString,
 	blockarr: packBlockArr,
     slot: packSlot,
+    chunkData: packChunkData,
 }
 
 exports.parsePacket = function (buf) {

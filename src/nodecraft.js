@@ -12,9 +12,9 @@
 	player = require('./player'),
 	helpers = require('./helpers');
 var enableProtocolDebug = 1;
-var enableChunkPreDebug = 0;
-var enableTerrainModsDebug = 0;
-var hideCommonPackets = true;
+var enableChunkPreDebug = 1;
+var enableTerrainModsDebug = 1;
+var hideCommonPackets = false;
 
 function protodebug() {
 	if (enableProtocolDebug) {
@@ -51,19 +51,21 @@ function composeTerrainPacket(cb, session, x, z) {
 			level: zip.Z_DEFAULT_COMPRESSION,
 			windowBits: zip.MAX_WBITS
 		}),
-		primaryBit = 0;
+		primaryBitMask;
 	gzip.on('data', function (data) {
 		zippedChunk = helpers.concat(zippedChunk, data);
 	}).on('error', function (err) {
 		throw err;
 	}).on('end', function () {
 		chunkpredebug("X: " + x + " Z: " + z);
+		chunkpredebug('Zipped data length ' + zippedChunk.length);
+		chunkpredebug('bitMask ' + primaryBitMask);
 		session.stream.write(ps.makePacket({
 			type: 0x33,
 			x: x,
 			z: z,
 //			y: 0,
-			continuous: true,
+			continuous: false,
 			primaryBit: primaryBitMask,
 			addBitMap: 0,
 			chunkSize: zippedChunk.length,
@@ -76,9 +78,12 @@ function composeTerrainPacket(cb, session, x, z) {
 		}));
 		cb();
 	});
-	session.world.terrain.getChunk(x, z, function (chunk_data) {
-		primaryBitMask = chunk_data.mask;
-		gzip.write(chunk_data.data);
+	session.world.terrain.getChunk(x, z, function (chunk) {
+		var chunkData = chunk.getData();
+		primaryBitMask = chunkData.bitMask;
+		chunkpredebug('bitMask ' + chunkData.bitMask);
+		chunkpredebug('PreZip data length ' + chunkData.data.length);
+		gzip.write(chunkData.data);
 		gzip.end();
 	});
 }
@@ -114,7 +119,7 @@ function login(session, pkt) {
 		playerID: world.uidgen.allocate(),
 		serverName: '',
 		levelType: 'DEFAULT',
-		serverMode: 0,
+		serverMode: 1,
 		//TODO: Survival vs Creative
 		dimension: 0,
 		difficulty: 0,
@@ -540,7 +545,7 @@ if (process.argv[2]) {
 		listenPort = parseInt(process.argv[2]);
 	} catch (e) {}
 }
-sys.puts('Nodecraft ' + 'v0.2'.bold.red + ' starting up.')
+sys.puts('Nodecraft ' + 'v0.3'.bold.red + ' starting up.')
 // TODO make port an option
 server.listen(listenPort);
 sys.puts(('Listening on port ' + listenPort).bold.grey + '...');

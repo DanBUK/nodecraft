@@ -1,31 +1,75 @@
 var sys = require('util');
+var helpers = require('./helpers');
 
 var transmitsLight;
 
-var Chunk = function (y) {
-	this.sizeX = 16;
-	this.sizeY = 16;
-	this.sizeZ = 16;
+var subChunkSizeX = 16,
+	subChunkSizeY = 16,
+	subChunkSizeZ = 16,
+	columnChunkHeight = 16, // 16*16 = 256
+	columnSizeX = subChunkSizeX,
+	columnSizeY = columnChunkHeight * subChunkSizeY,
+	columnSizeZ = subChunkSizeZ,
+	chunkVolume = subChunkSizeX * subChunkSizeY * subChunkSizeZ,
+	halfChunkVolume = chunkVolume / 2,
+	chunkArea = subChunkSizeX * subChunkSizeZ;
 
-	this.yOffset = (y * this.sizeY);
+function filledBuffer(size, val) {
+	var buf = new Buffer(size);
+	buf.fill(val);
+	return buf;
+}
 
-	this.sectionSize = this.sizeX * this.sizeY * this.sizeZ;
+// Use less memory by using the same empty buffers until data is added.
+var CONST = {
+	emptyFullByteChunk: filledBuffer(chunkVolume, 0x00),
+	emptyHalfByteChunk: filledBuffer(halfChunkVolume, 0x00),
+	emptyChunkArea:     filledBuffer(chunkArea, 0x00)
+};
+
+
+// Chuck is actually a column holding smaller chunks
+var Chunk = function () {
 	this.lit = 0;
-	this.isSky = true;
 
 	this.highest_nontransmitting_chunk = 0;
 
-	this.dataBlockType  = new Buffer(this.sectionSize); // size 4096
-	this.dataBlockType.fill(0);
-	this.dataMetadata   = new Buffer(this.sectionSize / 2); // size 2048
-	this.dataMetadata.fill(0);
-	this.dataBlockLight = new Buffer(this.sectionSize / 2);// size 2048
-	this.dataBlockLight.fill(0); 
-	this.dataSkyLight   = new Buffer(this.sectionSize / 2); // size 2048
-	this.dataSkyLight.fill(0);
-//	this.dataAdd        = new Buffer(this.sectionSize / 2);.fill(0); // size 2048
-	this.dataBiome      = new Buffer(this.sizeX * this.sizeZ); // size 256
-	this.dataBiome.fill(0);
+	this.biomeData       = CONST.emptyChunkArea;
+	this.biomeDataUnique = false;
+
+	var subChunks = [];
+	// create empty chunks
+	for (var i = 0; i < columnChunkHeight; i++) {
+		subChunks[i] = {
+			isEmpty: true,
+			top: i * subChunkSizeY + subChunkSizeY - 1,
+			bottom: i * subChunkSizeY,
+			blockType:  CONST.emptyFullByteChunk,
+			blockTypeUnique: false,
+			metaData:   CONST.emptyHalfByteChunk,
+			metaDataUnique: false,
+			blockLight: CONST.emptyHalfByteChunk,
+			blockLightUnique: false,
+			skyLight:   CONST.emptyHalfByteChunk,
+			skyLightUnique: false,
+			// addArray:   CONST.emptyHalfByteChunk, // not used yet
+			// addArrayUnique false
+		};
+	}
+
+	this.subChunks = subChunks;
+
+// 	this.dataBlockType  = new Buffer(this.sectionSize); // size 4096
+// 	this.dataBlockType.fill(0);
+// 	this.dataMetadata   = new Buffer(this.sectionSize / 2); // size 2048
+// 	this.dataMetadata.fill(0);
+// 	this.dataBlockLight = new Buffer(this.sectionSize / 2);// size 2048
+// 	this.dataBlockLight.fill(0); 
+// 	this.dataSkyLight   = new Buffer(this.sectionSize / 2); // size 2048
+// 	this.dataSkyLight.fill(0);
+// //	this.dataAdd        = new Buffer(this.sectionSize / 2);.fill(0); // size 2048
+// 	this.dataBiome      = new Buffer(this.sizeX * this.sizeZ); // size 256
+// 	this.dataBiome.fill(0);
 
 // 	this.offset = {
 // 		block:    0,
@@ -40,30 +84,24 @@ var Chunk = function (y) {
 	// this.data.fill(0);
 };
 
-Chunk.prototype.indexOf = function (x, y, z) {
-	return (y - this.yOffset) + (z * this.sizeY) + (x * this.sizeY * this.sizeZ);
+
+
+function indexOf(x, y, z) {
+	return (y & 0xf) + (z * subChunkSizeY) + (x * subChunkSizeY * subChunkSizeZ);
 };
 
-Chunk.prototype.setType = function (x, y, z, type) {
-	if (!transmitsLight(type) && (y > this.highest_nontransmitting_chunk)) {
-		this.highest_nontransmitting_chunk = y;
-	}
-
-	if (!type === 0x00) {
-		this.isSky = false;
-	}
-
-	this.dataBlockType[this.indexOf(x, y, z)] = type;
+function subChunkIndex(y) {
+	return y >> 4;
 };
 
-Chunk.prototype.getType = function (x, y, z) {
-	return this.dataBlockType[this.indexOf(x, y, z)];
-};
+// function getSubChunk(x, y, z) {
+// 	return this.subChunks[y >> 4];
+// };
 
-function setHalfByte(bufferName, index, value) {
+function setHalfByte(buffer, index, value) {
 	var trueIndex = ~~(index / 2),
 		top = index % 2 === 1,
-		currentValue = this[bufferName][trueIndex];
+		currentValue = buffer[trueIndex];
 
 	if (top) {
 		value = (currentValue & 0xf) | ((value & 0xf) << 4);
@@ -71,13 +109,13 @@ function setHalfByte(bufferName, index, value) {
 		value = (currentValue & 0xf0) | (value & 0xf);
 	}
 
-	this[bufferName][trueIndex] = value;
+	buffer[trueIndex] = value;
 }
 
-function getHalfByte(bufferName, index) {
+function getHalfByte(buffer, index) {
 	var trueIndex = ~~(index / 2),
 		top = index % 2 === 1,
-		value = this[bufferName][trueIndex];
+		value = buffer[trueIndex];
 	if (top) {
 		return (value & 0xf0) >> 4;
 	} else {
@@ -85,41 +123,74 @@ function getHalfByte(bufferName, index) {
 	}
 }
 
-Chunk.prototype.setMetadata = function (x, y, z, meta) {
-	setHalfByte(
-		'dataMetadata',
-		this.indexOf(x, y, z),
-		meta
-	);
+
+Chunk.prototype.setType = function (x, y, z, type) {
+	if (!transmitsLight(type) && (y > this.highest_nontransmitting_chunk)) {
+		this.highest_nontransmitting_chunk = y;
+	}
+
+	var subChunk = this.subChunks[subChunkIndex(y)];
+
+	if (type !== 0x00) {
+		if (!subChunk.blockTypeUnique) {
+			subChunk.blockType = filledBuffer(chunkVolume, 0x00);
+			subChunk.blockTypeUnique = true;
+		}
+
+		subChunk.isEmpty = false;
+	}
+	if (subChunk.blockTypeUnique)
+	subChunk.blockType[indexOf(x, y, z)] = type;
 };
 
-Chunk.prototype.getMetadata = function (x, y, z) {
-	return getHalfByte(
-		'dataMetadata',
-		this.indexOf(x, y, z)
-	);
+Chunk.prototype.getType = function (x, y, z) {
+	return this.subChunks[subChunkIndex(y)].blockType[indexOf(x, y, z)];
 };
 
-Chunk.prototype.setLighting = function (x, y, z, meta) {
+
+//ToDo: MetaData
+// Chunk.prototype.setMetadata = function (x, y, z, meta) {
+// 	setHalfByte(
+// 		'dataMetadata',
+// 		indexOf(x, y, z),
+// 		meta
+// 	);
+// };
+
+// Chunk.prototype.getMetadata = function (x, y, z) {
+// 	return getHalfByte(
+// 		'dataMetadata',
+// 		indexOf(x, y, z)
+// 	);
+// };
+
+Chunk.prototype.setLighting = function (x, y, z, value) {
+	var subChunk = this.subChunks[subChunkIndex(y)];
+
+	if (!subChunk.blockLightUnique) {
+		subChunk.blockLight = filledBuffer(halfChunkVolume, 0x00);
+		subChunk.blockLightUnique = true;
+	}
+
 	setHalfByte(
-		'dataBlockLight',
-		this.indexOf(x, y, z),
-		meta
+		subChunk.blockLight,
+		indexOf(x, y, z),
+		value
 	);
 };
 
 Chunk.prototype.getLighting = function (x, y, z) {
 	return getHalfByte(
-		'dataBlockLight',
-		this.indexOf(x, y, z)
+		this.subChunks[subChunkIndex(y)].blockLight,
+		indexOf(x, y, z)
 	);
 };
 
 Chunk.prototype.clearLight = function () {
 	var x, z, y;
-	for (x = 0; x < this.sizeX; x++) {
-		for (z = 0; z < this.sizeZ; z++) {
-			for (y = this.sizeY - 1; y >= 0; y--) {
+	for (x = 0; x < columnSizeX; x++) {
+		for (z = 0; z < columnSizeZ; z++) {
+			for (y = columnSizeY - 1; y >= 0; y--) {
 				if (transmitsLight(this.getType(x, y, z))) {
 					this.setLighting(x, y, z, 0x1);
 				} else {
@@ -132,9 +203,9 @@ Chunk.prototype.clearLight = function () {
 
 Chunk.prototype.setSkyLight = function (light) {
 	var x, z, y;
-	for (x = 0; x < this.sizeX; x++) {
-		for (z = 0; z < this.sizeZ; z++) {
-			for (y = this.sizeY - 1; y >= 0; y--) {
+	for (x = 0; x < columnSizeX; x++) {
+		for (z = 0; z < columnSizeZ; z++) {
+			for (y = columnSizeY - 1; y >= 0; y--) {
 				if (!transmitsLight(this.getType(x, y, z))) {
 					break;
 				}
@@ -145,12 +216,41 @@ Chunk.prototype.setSkyLight = function (light) {
 };
 
 Chunk.prototype.getData = function() {
+	var blockTypeArr  = [],
+		metadataArr   = [],
+		blockLightArr = [],
+		skyLightArr   = [],
+		bitMask = 0,
+		iMask   = 1,
+		bufferArr,
+		allDataBuf;
+
+	for (var i = 0; i < columnChunkHeight; i++) {
+		var subChunk = this.subChunks[i];
+		if (!subChunk.isEmpty){
+			bitMask |= iMask;
+			blockTypeArr .push(subChunk.blockType);
+			metadataArr  .push(subChunk.blockLight);
+			blockLightArr.push(subChunk.metaData);
+			skyLightArr  .push(subChunk.skyLight);
+		}
+
+		iMask <<= 1;
+	}
+
+	// Produces an array of buffers in the correct order
+	bufferArr = blockTypeArr.concat(
+		metadataArr,
+		blockLightArr,
+		skyLightArr
+	);
+	bufferArr.push(this.biomeData);
+	
+	allDataBuf = helpers.concat.apply(null, bufferArr);
+
 	return {
-		BlockType: this.dataBlockType,
-		Metadata: this.dataMetadata,
-		BlockLight: this.dataBlockLight,
-		SkyLight: this.dataSkyLight,
-		Biome: this.dataBiome
+		data: allDataBuf,
+		bitMask: bitMask
 	}
 }
 
