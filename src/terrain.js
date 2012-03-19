@@ -24,39 +24,45 @@ function fillChunk(chunk_data, x, z) {
 				} else if (y2 < threshold) {
 					chunk_data.setType(x2, y2, z2, 0x03);
 				} else if (y2 == threshold) {
-					chunk_data.setType(x2, y2, z2, 0x02);
+					if((x + x2) % 8 === 0) {
+						chunk_data.setType(x2, y2, z2, 0x04);
+					} else if ((z + z2) % 8 === 0) {
+						chunk_data.setType(x2, y2, z2, 0x01);
+					} else {
+						chunk_data.setType(x2, y2, z2, 0x02);
+					}
 				} else {
-					chunk_data.setType(x2, y2, z2, 0x00);
+				//		chunk_data.setType(x2, y2, z2, 0x00);
 				}
 			}
 		}
 	}
 
-	// if (Math.floor(Math.random() * 4) == 1) { /* add a tree */
-	// 	var tx = Math.floor(Math.random() * 16);
-	// 	var tz = Math.floor(Math.random() * 16);
-	// 	var th = Math.floor(Math.random() * 6) + 3;
-	// 	var ty;
+	if (Math.floor(Math.random() * 4) == 1) { /* add a tree */
+		var tx = Math.floor(Math.random() * 16);
+		var tz = Math.floor(Math.random() * 16);
+		var th = Math.floor(Math.random() * 6) + 3;
+		var ty;
 
-	// 	for (var i = 127; i >= 0; i--)
-	// 	if (chunk_data.getType(tx, i, tz) != 0) {
-	// 		ty = i;
-	// 		break;
-	// 	}
+		for (var i = 127; i >= 0; i--)
+		if (chunk_data.getType(tx, i, tz) != 0) {
+			ty = i;
+			break;
+		}
 
 
-	// 	for (var i = Math.floor(th / 2); i < th + 2; i++) {
-	// 		for (var j = -2; j < 3; j++)
-	// 		for (var k = -2; k < 3; k++) {
-	// 			if (j + tx < 0 || j + tx > 15 || k + tz < 0 || k + tz > 15) continue;
-	// 			chunk_data.setType(tx + j, i + ty, tz + k, 18);
-	// 		}
-	// 	}
+		for (var i = Math.floor(th / 2); i < th + 2; i++) {
+			for (var j = -2; j < 3; j++)
+			for (var k = -2; k < 3; k++) {
+				if (j + tx < 0 || j + tx > 15 || k + tz < 0 || k + tz > 15) continue;
+				chunk_data.setType(tx + j, i + ty, tz + k, 18);
+			}
+		}
 
-	// 	for (var i = 1; i <= th; i++)
-	// 	chunk_data.setType(tx, i + ty, tz, 17);
+		for (var i = 1; i <= th; i++)
+		chunk_data.setType(tx, i + ty, tz, 17);
 
-	// }
+	}
 }
 
 /* Stubbed out with procedural terrain generator */

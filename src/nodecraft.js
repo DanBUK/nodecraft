@@ -14,7 +14,7 @@
 var enableProtocolDebug = 1;
 var enableChunkPreDebug = 1;
 var enableTerrainModsDebug = 1;
-var hideCommonPackets = false;
+var hideCommonPackets = true;
 
 function protodebug() {
 	if (enableProtocolDebug) {
@@ -61,11 +61,17 @@ function composeTerrainPacket(cb, session, x, z) {
 		chunkpredebug('Zipped data length ' + zippedChunk.length);
 		chunkpredebug('bitMask ' + primaryBitMask);
 		session.stream.write(ps.makePacket({
+			type: 0x32,
+			mode: true,
+			x: x,
+			z: z
+		}));
+		session.stream.write(ps.makePacket({
 			type: 0x33,
 			x: x,
 			z: z,
 //			y: 0,
-			continuous: false,
+			continuous: true,
 			primaryBit: primaryBitMask,
 			addBitMap: 0,
 			chunkSize: zippedChunk.length,
@@ -144,8 +150,10 @@ function login(session, pkt) {
 		}
 	}
 	session.stream.write(zBuf); /* Fast start */
-	for (var x = -3 * 16; x < 3 * 16; x += 16) {
-		for (var z = -3 * 16; z < 3 * 16; z += 16) { /* Closure for callback [cannot do anonymously, otherwise we end up with 160,160] */
+	// for (var x = -3 * 16; x < 3 * 16; x += 16) {
+	// for (var z = -3 * 16; z < 3 * 16; z += 16) {
+	for (var x = -3; x < 3; x += 1) {
+		for (var z = -3; z < 3; z += 1) { /* Closure for callback [cannot do anonymously, otherwise we end up with 160,160] */
 			r = function (x, z) { /* Callback to be added to outgoing session task list */
 				return function (cb) {
 					composeTerrainPacket(cb, session, x, z);
