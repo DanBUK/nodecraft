@@ -43,7 +43,7 @@ var Chunk = function () {
 	for (var i = 0; i < columnChunkHeight; i++) {
 		subChunks[i] = {
 			isEmpty: true,
-			top: i * subChunkSizeY + subChunkSizeY - 1,
+			top: (i * subChunkSizeY) + (subChunkSizeY - 1),
 			bottom: i * subChunkSizeY,
 			blockType:  CONST.emptyFullByteChunk,
 			blockTypeUnique: false,
@@ -90,7 +90,7 @@ var Chunk = function () {
 function indexOf(x, y, z) {
 //	return (y & 0xf) + (z * subChunkSizeY) + (x * subChunkSizeY * subChunkSizeZ);
 	y = (y & 0xf);
-	return x + (z * subChunkSizeY) + (y * subChunkSizeY * subChunkSizeZ);
+	return x + (z * subChunkSizeX) + (y * subChunkSizeX * subChunkSizeZ);
 };
 
 function subChunkIndex(y) {
@@ -134,16 +134,16 @@ Chunk.prototype.setType = function (x, y, z, type) {
 
 	var subChunk = this.subChunks[subChunkIndex(y)];
 
-	if (type !== 0x00) {
+//	if (type !== 0x00) {
 		if (!subChunk.blockTypeUnique) {
 			subChunk.blockType = filledBuffer(chunkVolume, 0x00);
 			subChunk.blockTypeUnique = true;
 		}
 
 		subChunk.isEmpty = false;
-	}
+//	}
 	if (subChunk.blockTypeUnique)
-	subChunk.blockType[indexOf(x, y, z)] = type;
+		subChunk.blockType[indexOf(x, y, z)] = type;
 };
 
 Chunk.prototype.getType = function (x, y, z) {

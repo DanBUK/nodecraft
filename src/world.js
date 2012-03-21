@@ -1,5 +1,5 @@
 var uniqueid = require('./uniqueid');
-var mongodb = require('../node_modules/mongodb');
+//var mongodb = require('../node_modules/mongodb');
 
 var World = function() {
     this.terrain = {};
