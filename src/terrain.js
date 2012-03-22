@@ -14,12 +14,10 @@ function WorldTerrain() {
 }
 
 function fillChunk(chunk_data, x, z) {
-	var offsetX = x * 16,
-		offsetZ = z * 16;
 	for (var x2 = 0; x2 < 16; x2++) {
 		for (var y2 = 0; y2 < 256; y2++) {
 			for (var z2 = 0; z2 < 16; z2++) {
-				var threshold = 64 + Math.floor(Math.sin(Math.sqrt((offsetX + x2) * (offsetX + x2) + (offsetZ + z2) * (offsetZ + z2)) / 2) * 2);
+				var threshold = 64 + Math.floor(Math.sin(Math.sqrt((x + x2) * (x + x2) + (z + z2) * (z + z2)) / 64) * 16);
 
 				if (y2 == 0) {
 					chunk_data.setType(x2, y2, z2, 0x07);
@@ -39,7 +37,7 @@ function fillChunk(chunk_data, x, z) {
 			}
 		}
 	}
-	var trees = false;
+	var trees = true;
 	if (Math.floor(Math.random() * 4) == 1 && trees ) { /* add a tree */
 		var tx = Math.floor(Math.random() * 16);
 		var tz = Math.floor(Math.random() * 16);
@@ -77,18 +75,18 @@ WorldTerrain.prototype.loadTerrain = function (x, z, done_callback) {
 }
 
 WorldTerrain.prototype.getChunk = function (x, z, done_callback) {
-//	var x_i = this.chunkIndex(x);
-//	var z_i = this.chunkIndex(z);
-	if (!this.chunks[[x, z]]) {
+	var x_i = this.chunkIndex(x);
+	var z_i = this.chunkIndex(z);
+	if (!this.chunks[[x_i, z_i]]) {
 		this.loadTerrain(x, z, done_callback)
 	}
 	else {
-		done_callback(this.chunks[[x, z]]);
+		done_callback(this.chunks[[x_i, z_i]]);
 	}
 }
 
 WorldTerrain.prototype.chunkIndex = function (n) {
-	return n;
+	return n >> this.chunk_xz_shift;
 }
 
 WorldTerrain.prototype.getCellType = function (x, y, z, done_callback) {

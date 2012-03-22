@@ -24,7 +24,7 @@ function filledBuffer(size, val) {
 var CONST = {
 	emptyFullByteChunk: filledBuffer(chunkVolume, 0x00),
 	emptyHalfByteChunk: filledBuffer(halfChunkVolume, 0x00),
-	lightHalfByteChunk: filledBuffer(halfChunkVolume, 0x0f),
+	lightHalfByteChunk: filledBuffer(halfChunkVolume, 0xff),
 	emptyChunkArea:     filledBuffer(chunkArea, 0x00)
 };
 
@@ -51,7 +51,7 @@ var Chunk = function () {
 			metaDataUnique: false,
 			blockLight: CONST.lightHalfByteChunk,
 			blockLightUnique: false,
-			skyLight:   CONST.emptyHalfByteChunk,
+			skyLight:   CONST.lightHalfByteChunk,
 			skyLightUnique: false,
 			// addArray:   CONST.emptyHalfByteChunk, // not used yet
 			// addArrayUnique false
@@ -134,14 +134,15 @@ Chunk.prototype.setType = function (x, y, z, type) {
 
 	var subChunk = this.subChunks[subChunkIndex(y)];
 
-//	if (type !== 0x00) {
+	if (type !== 0x00) {
 		if (!subChunk.blockTypeUnique) {
 			subChunk.blockType = filledBuffer(chunkVolume, 0x00);
 			subChunk.blockTypeUnique = true;
 		}
 
 		subChunk.isEmpty = false;
-//	}
+	}
+
 	if (subChunk.blockTypeUnique)
 		subChunk.blockType[indexOf(x, y, z)] = type;
 };

@@ -51,7 +51,10 @@ function composeTerrainPacket(cb, session, x, z) {
 			level: zip.Z_DEFAULT_COMPRESSION,
 			windowBits: zip.MAX_WBITS
 		}),
-		primaryBitMask;
+		primaryBitMask,
+		columnX = session.world.terrain.chunkIndex(x),
+		columnZ = session.world.terrain.chunkIndex(z);
+
 	gzip.on('data', function (data) {
 		zippedChunk = helpers.concat(zippedChunk, data);
 	}).on('error', function (err) {
@@ -63,13 +66,13 @@ function composeTerrainPacket(cb, session, x, z) {
 		session.stream.write(ps.makePacket({
 			type: 0x32,
 			mode: true,
-			x: x,
-			z: z
+			x: columnX,
+			z: columnZ
 		}));
 		session.stream.write(ps.makePacket({
 			type: 0x33,
-			x: x,
-			z: z,
+			x: columnX,
+			z: columnZ,
 //			y: 0,
 			continuous: true,
 			primaryBit: primaryBitMask,
@@ -137,23 +140,21 @@ function login(session, pkt) {
 		message: pkt.username + ' joined the game'
 	}));
 	// i'm going to send you some chunks!
-	// var zBuf = new Buffer(0);
-	// for (var x = -10; x < 10; x++) {
-	// 	for (var z = -10; z < 10; z++) {
-	// 		var buf = ps.makePacket({
-	// 			type: 0x32,
-	// 			mode: true,
-	// 			x: x,
-	// 			z: z
-	// 		});
-	// 		zBuf = helpers.concat(zBuf, buf);
-	// 	}
-	// }
-	// session.stream.write(zBuf); /* Fast start */
-	// for (var x = -3 * 16; x < 3 * 16; x += 16) {
-	// for (var z = -3 * 16; z < 3 * 16; z += 16) {
-	for (var x = -3; x < 3; x += 1) {
-		for (var z = -3; z < 3; z += 1) { /* Closure for callback [cannot do anonymously, otherwise we end up with 160,160] */
+	var zBuf = new Buffer(0);
+	for (var x = -10; x < 10; x++) {
+		for (var z = -10; z < 10; z++) {
+			var buf = ps.makePacket({
+				type: 0x32,
+				mode: true,
+				x: x,
+				z: z
+			});
+			zBuf = helpers.concat(zBuf, buf);
+		}
+	}
+	session.stream.write(zBuf); /* Fast start */
+	for (var x = -3 * 16; x < 3 * 16; x += 16) {
+		for (var z = -3 * 16; z < 3 * 16; z += 16) { /* Closure for callback [cannot do anonymously, otherwise we end up with 160,160] */
 			r = function (x, z) { /* Callback to be added to outgoing session task list */
 				return function (cb) {
 					composeTerrainPacket(cb, session, x, z);
@@ -187,19 +188,19 @@ function login(session, pkt) {
 		session.world.terrain.getMaxHeight(0, 0, send_position_packet);
 	};
 	session.addOutgoing(get_and_send_position); /* Send rest of packets in visible range */
-	// for (var x = -10 * 16; x < 10 * 16; x += 16) {
-	// 	for (var z = -10 * 16; z < 10 * 16; z += 16) {
-	// 		if ((x == -16 || x == 0) && (z == -16 || z == 0)) continue; /* Closure for callback [cannot do anonymously, otherwise we end up with 160,160 */
-	// 		r = function (x, z) { /* Callback to be added to outgoing session task list */
-	// 			return function (cb) {
-	// 				session.world.terrain.recalculateLighting(x, z, function () {
-	// 					composeTerrainPacket(cb, session, x, z);
-	// 				});
-	// 			}
-	// 		}
-	// 		session.addOutgoing(r(x, z));
-	// 	}
-	// }
+	for (var x = -10 * 16; x < 10 * 16; x += 16) {
+		for (var z = -10 * 16; z < 10 * 16; z += 16) {
+			if ((x == -16 || x == 0) && (z == -16 || z == 0)) continue; /* Closure for callback [cannot do anonymously, otherwise we end up with 160,160 */
+			r = function (x, z) { /* Callback to be added to outgoing session task list */
+				return function (cb) {
+					session.world.terrain.recalculateLighting(x, z, function () {
+						composeTerrainPacket(cb, session, x, z);
+					});
+				}
+			}
+			session.addOutgoing(r(x, z));
+		}
+	}
 	world.onlineplayers++;
 	session.player = new player.Player(session);
 	session.player.name = pkt.username;
